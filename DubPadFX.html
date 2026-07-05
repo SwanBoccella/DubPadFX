@@ -94,7 +94,7 @@ body::after{content:'';position:fixed;inset:0;
 @media(min-width:860px){.grid{grid-template-columns:repeat(8,1fr)}}
 
 /* ── PAD ── */
-.pad{position:relative;aspect-ratio:1;min-height:74px;border-radius:7px;
+.pad{position:relative;aspect-ratio:1;min-height:84px;border-radius:7px;
   border:1px solid rgba(255,255,255,.06);background:var(--bg3);cursor:pointer;
   overflow:hidden;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:2px;transition:transform .06s,box-shadow .1s;
@@ -104,9 +104,9 @@ body::after{content:'';position:fixed;inset:0;
 .pad.on::before{opacity:1}
 .pad.playing{animation:pad-pulse .6s ease-out}
 @keyframes pad-pulse{0%{transform:scale(.88)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
-.pi{font-size:clamp(14px,3.2vw,18px);line-height:1;z-index:1;pointer-events:none}
-.pn{font-size:clamp(6.5px,1.35vw,8px);letter-spacing:.03em;text-transform:uppercase;
-  text-align:center;line-height:1.25;padding:0 3px;z-index:1;pointer-events:none;
+.pi{font-size:clamp(13px,2.8vw,16px);line-height:1;z-index:1;pointer-events:none}
+.pn{font-size:clamp(9px,2.3vw,12.5px);letter-spacing:.02em;text-transform:uppercase;
+  text-align:center;line-height:1.22;padding:0 3px;z-index:1;pointer-events:none;
   color:#ffffff;font-weight:700;
   text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 6px rgba(0,0,0,.7);
   transition:color .1s;word-break:break-word;max-width:100%}
@@ -208,6 +208,15 @@ body::after{content:'';position:fixed;inset:0;
 .fader-tick.zero{background:var(--amber);height:2px;box-shadow:0 0 5px rgba(255,215,0,.7);z-index:2}
 .mixer-empty{padding:30px 16px;text-align:center;color:rgba(255,255,255,.4);
   font-size:10px;letter-spacing:.06em;line-height:1.8}
+
+/* ── per-pad REVERB mini-knob, sits above the fader in each mixer strip ── */
+.rev-knob-wrap{display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0}
+.rev-knob-label{font-size:6px;letter-spacing:.08em;text-transform:uppercase;color:rgba(0,229,204,.75)}
+.rev-knob{width:30px;height:30px;cursor:grab;touch-action:none}
+.rev-knob:active{cursor:grabbing}
+.rev-knob-svg{width:100%;height:100%;overflow:visible}
+.rev-knob-val{font-size:7px;color:var(--teal);letter-spacing:.03em;min-width:28px;text-align:center}
+.mixer-body.full .rev-knob{width:38px;height:38px}
 
 /* cat colors */
 .pad[data-cat=sweeps]{border-color:rgba(0,229,255,.4)}
@@ -470,7 +479,7 @@ body::after{content:'';position:fixed;inset:0;
   <div class="ipath">/data/data/com.termux/files/home/storage/downloads/DubpadFX/</div>
   <div class="icred">
     Sweeps · Lasers · One-Shots · Sirens · Ambient FX · Favorites<br>
-    Volume per pad · Global Reverb · Tape Delay · Tap Tempo BPM<br>
+    Volume per pad · Per-pad Reverb · Tape Delay · Tap Tempo BPM<br>
     All processing offline-ready
   </div>
   <button class="ibtn" id="ibtn">▶ POWER ON</button>
@@ -531,7 +540,7 @@ body::after{content:'';position:fixed;inset:0;
   <div class="echo-hdr">
     <div>
       <div class="ebrand">ROLAND SPACE ECHO</div>
-      <div class="emodel">RE-201 · TAPE DELAY & SPRING REVERB</div>
+      <div class="emodel">RE-201 · TAPE DELAY &amp; SPRING REVERB</div>
     </div>
     <div class="tap-row" style="padding:0">
       <button class="tap-btn" id="tapBtn">TAP</button>
@@ -617,7 +626,7 @@ body::after{content:'';position:fixed;inset:0;
   <div class="modal mixer-full-modal">
     <div class="modal-drag"></div>
     <div class="modal-hdr">
-      <div class="modal-title">🎚 MIXER — PER-EFFECT VOLUME &amp; MUTE</div>
+      <div class="modal-title">🎚 MIXER — PER-EFFECT VOLUME, REVERB &amp; MUTE</div>
       <button class="modal-close" data-close="mixerModal">✕</button>
     </div>
     <div class="modal-body" style="padding:6px 8px">
@@ -738,11 +747,12 @@ const S = {
   customCats: {},
   favorites: [],
   nextCustomId: 1,
-  padVols: {},   // id → 0..2  (per-pad volume, 0-200% — Mixer dB readout is derived from this)
-  padMutes: {},  // id → bool  (per-pad DELAY BYPASS from the Mixer — does NOT affect volume or reverb)
+  padVols: {},     // id → 0..2  (per-pad volume, 0-200% — Mixer dB readout is derived from this)
+  padMutes: {},    // id → bool  (per-pad DELAY BYPASS from the Mixer — does NOT affect volume or reverb)
+  padReverbs: {},  // id → 0..2  (per-pad REVERB send amount, 0-200% — Mixer knob, independent of the pad's volume)
 };
 
-let A, mGain, dryG, wetG, dlyNode, fbNode, tapeLPpre, tapeLPfb, rvConv, rvGain, comp, anal;
+let A, mGain, dryG, wetG, dlyNode, fbNode, tapeLPpre, tapeLPfb, rvConv, rvGain, comp, anal, rvHiShelf, rvLoShelf, rvComp;
 let tapTimes = [], tapBPM = 120;
 let ctxPad = null;
 
@@ -761,6 +771,7 @@ function save(){
       mode: S.mode,
       padVols: S.padVols,
       padMutes: S.padMutes,
+      padReverbs: S.padReverbs,
     };
     localStorage.setItem('dubpad_v2', JSON.stringify(data));
   } catch(e){}
@@ -778,6 +789,7 @@ function load(){
     if(d.mode !== undefined) S.mode = d.mode;
     if(d.padVols) S.padVols = d.padVols;
     if(d.padMutes) S.padMutes = d.padMutes;
+    if(d.padReverbs) S.padReverbs = d.padReverbs;
   } catch(e){}
 }
 
@@ -862,12 +874,12 @@ function boot(){
   rvConv = A.createConvolver();
   rvConv.buffer = buildSpringIR();
 
-  const rvHiShelf = A.createBiquadFilter();
+  rvHiShelf = A.createBiquadFilter();
   rvHiShelf.type = 'highshelf';
   rvHiShelf.frequency.value = 4800;
   rvHiShelf.gain.value = -3.5;
 
-  const rvLoShelf = A.createBiquadFilter();
+  rvLoShelf = A.createBiquadFilter();
   rvLoShelf.type = 'lowshelf';
   rvLoShelf.frequency.value = 160;
   rvLoShelf.gain.value = -4;          // keeps the tail from getting muddy
@@ -876,12 +888,29 @@ function boot(){
   rvLoPass.type = 'lowpass';
   rvLoPass.frequency.value = 9000;    // gentle top-end rolloff, no digital hash
 
+  // ── Reverb-bus tamer ──
+  // A dedicated compressor sitting only on the reverb send. Transient-heavy
+  // sounds (one-shots, sirens with a hard attack) excite the spring/plate
+  // resonances hard, and since the send previously scaled linearly with the
+  // SPRING REV knob, at higher knob settings those transients could push the
+  // tail into a harsh, "sgradevole" metallic blast on certain samples before
+  // it ever reached the main output limiter. This compressor catches that
+  // right at the source, gently gluing the tail so it stays thick without
+  // spiking, on every sound rather than only average-level ones.
+  rvComp = A.createDynamicsCompressor();
+  rvComp.threshold.value = -20;
+  rvComp.knee.value = 14;
+  rvComp.ratio.value = 5;
+  rvComp.attack.value = 0.006;
+  rvComp.release.value = 0.22;
+
   rvGain = A.createGain(); rvGain.gain.value = S.rv;
 
   rvConv.connect(rvLoShelf);
   rvLoShelf.connect(rvLoPass);
   rvLoPass.connect(rvHiShelf);
-  rvHiShelf.connect(rvGain);
+  rvHiShelf.connect(rvComp);
+  rvComp.connect(rvGain);
   rvGain.connect(wetG);
 
   dryG.connect(comp); wetG.connect(comp);
@@ -910,7 +939,7 @@ function boot(){
 }
 
 /*
-  Spring/plate reverb IR v4 — hyperrealistic hybrid.
+  Spring/plate reverb IR v5 — clean, stable hybrid (no amplitude modulation).
 
   Real spring/plate reverb tanks have three audible layers, all present here:
 
@@ -926,20 +955,25 @@ function boot(){
   3) DIFFUSE TAIL — built from TWO layered noise bands instead of one:
        - a low-band (100–1500Hz) with a slightly longer decay, carrying the
          "boingy" low-frequency body real springs have
-       - a high-band (1500–6500Hz) with a shorter decay and its own
-         modulation, carrying the shimmering top-end
-     Summing two independently-decaying, independently-modulated bands avoids
-     the flat, single-color wash of a single noise layer and reads far closer
-     to a real convolution IR.
+       - a high-band (1500–6500Hz) with a shorter decay, carrying the airier
+         top-end
+     Both bands decay as a plain, static exponential curve — no LFO or
+     "shimmer" modulation is applied to their amplitude. An earlier version
+     modulated the tail with slow sine LFOs for extra "movement", but that
+     produced an audible tremolo/wobble in the tail that read as unclean and
+     distracting. Removing it keeps the reverb tail perfectly smooth and
+     predictable, exactly as requested.
 
   4) SPRING RESONANCE — a handful of very low-level, closely-spaced narrow
      resonant partials (not exact harmonics — springs are inharmonic) mixed
-     at low amplitude under the diffuse tail. Kept quiet enough to add
-     character/metallic "sproing" without ever dominating into audible pitch.
+     at very low amplitude under the diffuse tail. Kept quiet enough to add
+     a touch of character without ever dominating into audible pitch or
+     ringing.
 
   5) STEREO DECORRELATION — L/R use independent noise seeds, different early
-     reflection timings, different resonance detuning and different slow LFO
-     rates, exactly how a real dual-spring pair decorrelates channels.
+     reflection timings, and different resonance detuning, exactly how a
+     real dual-spring pair decorrelates channels — with no time-varying
+     modulation on either side.
 */
 function buildSpringIR(){
   const sr = A.sampleRate;
@@ -989,28 +1023,33 @@ function buildSpringIR(){
     bandpass(noiseHi, 1500, 6500);
 
     const loDecayT = dur*0.42, hiDecayT = dur*0.24;
-    const lfo1f = 0.55 + ch*0.09, lfo2f = 0.85 + ch*0.06, lfo3f = 1.3 + ch*0.11;
 
     // ── layer C: sparse inharmonic spring resonance partials (very quiet) ──
-    const resonFreqs = ch===0
-      ? [182, 311, 447, 623, 887, 1194]
-      : [176, 298, 461, 609, 902, 1211];
+    // Stesse frequenze su L e R: usare valori leggermente "scordati" tra i
+    // due canali (come nella versione precedente) crea un lento battimento
+    // quando i canali vengono sommati in mono (es. altoparlante del telefono),
+    // ed è proprio quello che si sente come tremolio residuo. Con le stesse
+    // frequenze su entrambi i canali il battimento sparisce del tutto.
+    const resonFreqs = [182, 311, 447, 623, 887, 1194];
 
     for(let i=0;i<len;i++){
       const t = i/sr;
       const envLo = Math.exp(-t/loDecayT);
       const envHi = Math.exp(-t/hiDecayT);
-      const shimmer = 1 + 0.05*Math.sin(2*Math.PI*lfo1f*t) + 0.03*Math.sin(2*Math.PI*lfo2f*t+ch);
-      const shimmerHi = 1 + 0.04*Math.sin(2*Math.PI*lfo3f*t+ch*1.7);
 
       let reson = 0;
       for(let rIdx=0; rIdx<resonFreqs.length; rIdx++){
         reson += Math.sin(2*Math.PI*resonFreqs[rIdx]*t) * Math.exp(-t/(0.5+rIdx*0.12));
       }
-      reson *= 0.018; // keep resonance subtle — character, not tone
+      reson *= 0.008; // ancora più discreta — solo un accenno di carattere
 
-      d[i+preDelaySamples] = noiseLo[i]*envLo*shimmer*0.62
-                            + noiseHi[i]*envHi*shimmerHi*0.42
+      // Decadimento pulito e stabile: niente modulazione LFO sull'ampiezza
+      // (la "shimmer" precedente introduceva un tremolo/wobble percepibile
+      // e fastidioso). Qui il volume della coda scende in modo lineare
+      // ed esponenziale, senza oscillazioni. Livello generale leggermente
+      // abbassato rispetto a prima, come richiesto.
+      d[i+preDelaySamples] = noiseLo[i]*envLo*0.56
+                            + noiseHi[i]*envHi*0.37
                             + reson;
     }
 
@@ -1031,7 +1070,10 @@ function buildSpringIR(){
 
 // noDelay=true esclude SOLO l'invio al ramo tape-delay; dry e reverb restano collegati
 // e quindi il volume percepito del suono non cambia — cambia solo la presenza dell'eco.
-function makeInputNode(amp=1, noDelay=false){
+// revAmt (0..2, default 1) è il controllo INDIVIDUALE per-pad impostato dalla manopola
+// REVERB nel Mixer: scala SOLO l'invio al riverbero a molla di questo pad, indipendente
+// dal volume (amp) e dal riverbero globale controllato dalla modalità dell'Echo Unit.
+function makeInputNode(amp=1, noDelay=false, revAmt=1){
   const g = A.createGain(); g.gain.value = amp;
   g.connect(dryG);
   if(!noDelay) g.connect(tapeLPpre);
@@ -1047,29 +1089,56 @@ function makeInputNode(amp=1, noDelay=false){
   // così il suono si sente comunque più forte ma la coda di riverbero non
   // diventa sproporzionata né metallica.
   const revAmp = amp<=1 ? amp : Math.pow(amp, 0.5);
-  const rg = A.createGain(); rg.gain.value = revAmp;
+  const rg = A.createGain(); rg.gain.value = revAmp * revAmt;
   g.connect(rg);
   rg.connect(rvConv);
 
   return g;
 }
 
+// ── Curva di taper per il riverbero della modalità Echo Unit ──
+// La curva a potenza (esponente 1.6) resta invariata: continua a controllare
+// come il riverbero GLOBALE (impostato da S.rv, ora un valore interno fisso —
+// la manopola SPRING REV è stata rimossa dalla console) reagisce a seconda
+// della modalità (SPRING/ECHO+SPRING/DEEP DUB). Il controllo per-pad del
+// riverbero, invece, si somma moltiplicativamente più a valle (vedi
+// makeInputNode / revAmt) e non passa da questa curva.
+const RV_KNOB_MAX = 1.8;
+function rvShape(vKnob){
+  const n = Math.max(0, Math.min(1, vKnob / RV_KNOB_MAX));
+  const shaped = Math.pow(n, 1.6);
+  return shaped * RV_KNOB_MAX;
+}
+
 function setMode(m){
   if(!A) return; S.mode=m;
   const t=A.currentTime;
-  const fb2=Math.min(S.fb,.93), dw=S.dw, rv=S.rv;
+  const fb2=Math.min(S.fb,.93), dw=S.dw, rv=rvShape(S.rv);
   const modes=[
     [1,0,0,0],
     [1-dw*.5, dw, fb2, 0],
     [1-dw*.5, dw*.9, 0, rv],
     [1-dw*.4, dw, fb2, rv],
-    [.12, .95, Math.min(fb2*1.55,.93), rv*1.5],
+    [.12, .95, Math.min(fb2*1.55,.93), rv*1.25],
   ];
   const [d,w,f,r]=modes[m];
+  // Leggera attenuazione generale del riverbero (indipendente dalla manopola
+  // SPRING REV, che continua a funzionare in proporzione come prima).
+  const REVERB_TRIM = 0.75;
   dryG.gain.setTargetAtTime(d,t,.06);
   wetG.gain.setTargetAtTime(w,t,.06);
   fbNode.gain.setTargetAtTime(f,t,.06);
-  rvGain.gain.setTargetAtTime(r,t,.06);
+  rvGain.gain.setTargetAtTime(r*REVERB_TRIM,t,.06);
+
+  // Tone-shaping dinamico: più il riverbero è spinto, più si tolgono acuti
+  // e bassi dalla coda. Questo è ciò che evita che diventi "metallico" o
+  // "boomy" quando lo si spinge in alto — invece di suonare semplicemente
+  // più forte, la coda resta timbricamente equilibrata a qualunque livello.
+  if(rvHiShelf && rvLoShelf){
+    const push = Math.min(rv/RV_KNOB_MAX, 1); // 0..1
+    rvHiShelf.gain.setTargetAtTime(-3.5 - push*4.5, t, .12);
+    rvLoShelf.gain.setTargetAtTime(-4 - push*3, t, .12);
+  }
 }
 
 // Restituisce il volume effettivo di un pad (il MUTE del mixer NON tocca il volume:
@@ -1078,27 +1147,60 @@ function effectiveVol(padId){
   return (S.padVols[padId] !== undefined) ? S.padVols[padId] : 1.0;
 }
 
+// Restituisce la quantità di RIVERBERO individuale di un pad (manopola nel Mixer,
+// 0-200%, default 100% = comportamento invariato rispetto a prima dell'introduzione
+// del controllo per-pad).
+function effectiveReverb(padId){
+  return (S.padReverbs[padId] !== undefined) ? S.padReverbs[padId] : 1.0;
+}
+
 // true se per questo pad l'invio al delay/echo è disattivato (pulsante MUTE del mixer).
 // Il volume secco (dry) e il riverbero a molla restano SEMPRE invariati.
 function isDelayMuted(padId){
   return !!(S.padMutes && S.padMutes[padId]);
 }
 
-// Riproduce un buffer con volume individuale (per-pad gain, 0-200%).
-// Il mute del mixer disattiva solo il ramo "delay" per questo pad, non dry/reverb.
+// Riproduce un buffer con volume individuale (per-pad gain, 0-200%) e riverbero
+// individuale (per-pad send, 0-200%). Il mute del mixer disattiva solo il ramo
+// "delay" per questo pad, non dry/reverb.
 function playBuffer(buf, padId){
   if(!A||!buf) return;
   if(A.state==='suspended') A.resume();
 
   const padVol = effectiveVol(padId);
+  const padRev = effectiveReverb(padId);
   const noDelay = isDelayMuted(padId);
 
   const src = A.createBufferSource();
   src.buffer = buf;
-  const inG = makeInputNode(padVol, noDelay);
+  const inG = makeInputNode(padVol, noDelay, padRev);
   src.connect(inG);
   src.start(A.currentTime);
+  // Teniamo un riferimento al gain "di testa" di questa voce, così se l'utente
+  // preme subito un altro pad possiamo dissolvere questa invece di tagliarla
+  // di netto (vedi fadeOutAndStop più sotto).
+  src._voiceGain = inG;
   return src;
+}
+
+// Dissolvenza morbida di una voce già in corso (invece di uno stop secco):
+// il volume scende linearmente a zero in fadeMs millisecondi, poi la
+// sorgente viene fermata. Se qualcosa va storto, ripiega su uno stop diretto.
+function fadeOutAndStop(src, fadeMs=70){
+  if(!src) return;
+  try{
+    const g = src._voiceGain;
+    if(g && A){
+      const t = A.currentTime;
+      const now = g.gain.value;
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(now, t);
+      g.gain.linearRampToValueAtTime(0.0001, t + fadeMs/1000);
+    }
+    setTimeout(()=>{ try{src.stop();}catch(e){} }, fadeMs+20);
+  }catch(e){
+    try{src.stop();}catch(e2){}
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1123,8 +1225,9 @@ async function addPad(file, cat, overrideName){
   blobURLs.set(id, url);
   const pad = {id, name:baseName, cat, icon:iconForName(baseName), fileName, url};
   S.pads.push(pad);
-  if(!(id in S.padVols)) S.padVols[id] = 1.0;  // volume default 100%
+  if(!(id in S.padVols)) S.padVols[id] = 1.0;      // volume default 100%
   if(!(id in S.padMutes)) S.padMutes[id] = false;
+  if(!(id in S.padReverbs)) S.padReverbs[id] = 1.0; // reverb default 100%
 
   const ab = await file.arrayBuffer();
   try{ await idbSet(id, {arrayBuffer: ab.slice(0), type:file.type, fileName}); }
@@ -1143,6 +1246,7 @@ function removePad(id){
   S.favorites = S.favorites.filter(f=>f!==id);
   delete S.padVols[id];
   delete S.padMutes[id];
+  delete S.padReverbs[id];
   audioBuffers.delete(id);
   const u = blobURLs.get(id);
   if(u) URL.revokeObjectURL(u);
@@ -1290,7 +1394,7 @@ function triggerPad(pad){
   if(isDelayMuted(pad.id)){
     showToast(`🔇 Delay OFF for "${pad.name}" — volume & reverb unaffected`);
   }
-  if(activeSrc){ try{activeSrc.stop();}catch(e){} }
+  if(activeSrc){ fadeOutAndStop(activeSrc); }
   activeSrc = playBuffer(buf, pad.id);
 
   // highlight grid pad, wherever it's currently rendered
@@ -1586,7 +1690,7 @@ document.getElementById('saveOrderBtn').addEventListener('click',()=>{
 document.getElementById('orderBtn').addEventListener('click',openOrderModal);
 
 // ═══════════════════════════════════════════════════════
-// MIXER — per-effect volume faders + mute
+// MIXER — per-effect volume faders + per-effect reverb knob + mute
 // ═══════════════════════════════════════════════════════
 // ── VOLUME in dB, centrato su 0 dB = volume ORIGINALE del file caricato ──
 // Range consentito dal mixer: -20 dB .. +20 dB (come richiesto).
@@ -1622,6 +1726,88 @@ function faderTicksHTML(){
   return out;
 }
 
+// ── knob rotante compatto per il RIVERBERO individuale di ogni pad ──
+// Stessa geometria/interazione delle manopole della console Echo Unit
+// (drag verticale, wheel di supporto), ma in scala ridotta per stare
+// sopra il fader nella singola channel-strip del Mixer. Range 0-200%,
+// default 100% (nessuna differenza rispetto al riverbero "naturale" del
+// pad prima dell'introduzione di questo controllo).
+const REVKNOB_MIN = 0, REVKNOB_MAX = 2;
+function ptcMini(cx,cy,r,deg){ const rd=(deg-90)*Math.PI/180; return {x:cx+r*Math.cos(rd), y:cy+r*Math.sin(rd)}; }
+function revArcD(n){
+  const a=-135+n*270; if(Math.abs(a+135)<.5) return '';
+  const s=ptcMini(15,14.5,10.5,-135), e=ptcMini(15,14.5,10.5,a);
+  const large=(a+135)>180?1:0;
+  return `M${s.x.toFixed(2)} ${s.y.toFixed(2)} A 10.5 10.5 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
+}
+function setRevKnobVisual(padId, n){
+  const knob=document.getElementById('revknob_'+padId); if(!knob) return;
+  const a=-135+n*270, rd=(a-90)*Math.PI/180;
+  const ind=knob.querySelector('.revknob-ind');
+  ind.setAttribute('x2',(15+9*Math.cos(rd)).toFixed(2));
+  ind.setAttribute('y2',(14.5+9*Math.sin(rd)).toFixed(2));
+  const arc=knob.querySelector('.revknob-arc');
+  const d=revArcD(n); if(d) arc.setAttribute('d',d); else arc.removeAttribute('d');
+  const valEl=document.getElementById('revval_'+padId);
+  const value = REVKNOB_MIN + n*(REVKNOB_MAX-REVKNOB_MIN);
+  if(valEl) valEl.textContent = Math.round(value*100)+'%';
+}
+function revKnobHTML(padId){
+  return `
+    <div class="rev-knob-wrap">
+      <div class="rev-knob-label">REVERB</div>
+      <div class="rev-knob" id="revknob_${padId}" data-id="${padId}">
+        <svg class="rev-knob-svg" viewBox="-1 -1 32 32">
+          <path d="M4.5 23.5 A 10.5 10.5 0 1 1 25.5 23.5" fill="none" stroke="#0a2e2a" stroke-width="3" stroke-linecap="round"/>
+          <path class="revknob-arc" fill="none" stroke="#00e5cc" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="15" cy="14.5" r="9" fill="#0e1a18" stroke="#0f3a35" stroke-width="1.2"/>
+          <line class="revknob-ind" x1="15" y1="14.5" x2="15" y2="5.5" stroke="#00e5cc" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="15" cy="14.5" r="1.6" fill="#00e5cc" opacity=".4"/>
+        </svg>
+      </div>
+      <div class="rev-knob-val" id="revval_${padId}">100%</div>
+    </div>`;
+}
+function attachRevKnobEvents(padId){
+  const knob=document.getElementById('revknob_'+padId); if(!knob) return;
+  const initVal=effectiveReverb(padId);
+  const initN=(initVal-REVKNOB_MIN)/(REVKNOB_MAX-REVKNOB_MIN);
+  setRevKnobVisual(padId, Math.max(0,Math.min(1,initN)));
+
+  let sy=0, sn=0, drag=false;
+  const clamp01=v=>Math.max(0,Math.min(1,v));
+  const curN=()=>{
+    const v=effectiveReverb(padId);
+    return clamp01((v-REVKNOB_MIN)/(REVKNOB_MAX-REVKNOB_MIN));
+  };
+  knob.addEventListener('pointerdown',e=>{
+    e.preventDefault(); e.stopPropagation();
+    knob.setPointerCapture(e.pointerId);
+    sy=e.clientY; sn=curN(); drag=true;
+  });
+  knob.addEventListener('pointermove',e=>{
+    if(!drag) return;
+    e.preventDefault(); e.stopPropagation();
+    const n=clamp01(sn+(sy-e.clientY)/130);
+    const val=REVKNOB_MIN+n*(REVKNOB_MAX-REVKNOB_MIN);
+    S.padReverbs[padId]=val;
+    setRevKnobVisual(padId, n);
+    save();
+  });
+  ['pointerup','pointercancel'].forEach(ev=>knob.addEventListener(ev,e=>{
+    if(drag) e.stopPropagation();
+    drag=false;
+  }));
+  knob.addEventListener('wheel',e=>{
+    e.preventDefault(); e.stopPropagation();
+    const n=clamp01(curN()+(e.deltaY>0?-.025:.025));
+    const val=REVKNOB_MIN+n*(REVKNOB_MAX-REVKNOB_MIN);
+    S.padReverbs[padId]=val;
+    setRevKnobVisual(padId, n);
+    save();
+  },{passive:false});
+}
+
 function openMixerModal(){
   buildMixer();
   openModal('mixerModal');
@@ -1647,6 +1833,7 @@ function buildMixer(){
       <div class="mixer-icon" data-id="${pad.id}" title="Tap to preview">${pad.icon}</div>
       <div class="mixer-pct" id="mpct_${pad.id}">${pct}%</div>
       <div class="mixer-db ${dbClass(db)}" id="mdb_${pad.id}">${fmtDb(db)}</div>
+      ${revKnobHTML(pad.id)}
       <div class="fader-track">
         ${faderTicksHTML()}
         <input type="range" class="mixer-fader" min="${DB_MIN}" max="${DB_MAX}" step="0.5" value="${db}"
@@ -1690,15 +1877,17 @@ function buildMixer(){
     });
 
     body.appendChild(strip);
+    attachRevKnobEvents(pad.id);
   });
 }
 document.getElementById('mixerResetBtn').addEventListener('click',()=>{
-  if(!confirm('Reset every channel to 100% (0 dB) and re-enable delay on all?')) return;
+  if(!confirm('Reset every channel to 100% volume, 100% reverb (0 dB) and re-enable delay on all?')) return;
   S.pads.forEach(pad=>{
     S.padVols[pad.id]=1.0;
+    S.padReverbs[pad.id]=1.0;
     if(S.padMutes) S.padMutes[pad.id]=false;
   });
-  save(); buildMixer(); renderGrid(); showToast('Mixer reset — all channels 0 dB, delay on');
+  save(); buildMixer(); renderGrid(); showToast('Mixer reset — all channels 0 dB, reverb 100%, delay on');
 });
 document.getElementById('mixerBtn').addEventListener('click',openMixerModal);
 
@@ -1798,6 +1987,7 @@ async function wipeAll(){
   S.nextCustomId = 1;
   S.padVols = {};
   S.padMutes = {};
+  S.padReverbs = {};
   S.activeTab = 'all';
 
   // wipe persisted storage
@@ -1883,7 +2073,8 @@ function animVU(){
 }
 
 // ═══════════════════════════════════════════════════════
-// KNOBS
+// KNOBS — Roland Space Echo console (SPRING REV master knob removed;
+// individual per-pad reverb is now controlled in the Mixer instead)
 // ═══════════════════════════════════════════════════════
 const KNOBS=[
   {id:'dt',label:'DELAY\nTIME',min:.05,max:2.0,value:S.dt,
@@ -1891,8 +2082,6 @@ const KNOBS=[
    fn:v=>{S.dt=v;if(A)dlyNode.delayTime.setTargetAtTime(v,A.currentTime,.06);}},
   {id:'fb',label:'FEED\nBACK',min:0,max:.98,value:S.fb,
    fmt:v=>(v*100|0)+'%',fn:v=>{S.fb=v;setMode(S.mode);}},
-  {id:'rv',label:'SPRING\nREV',min:0,max:1.8,value:S.rv,
-   fmt:v=>(v*100|0)+'%',fn:v=>{S.rv=v;setMode(S.mode);}},
   {id:'dw',label:'DRY\nWET',min:0,max:1,value:S.dw,
    fmt:v=>(v*100|0)+'%',fn:v=>{S.dw=v;setMode(S.mode);}},
   {id:'vol',label:'MASTER\nVOL',min:0,max:1,value:S.vol,
