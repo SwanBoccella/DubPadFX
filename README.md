@@ -32,7 +32,7 @@ https://definite-teal-5ka734sq.edgeone.dev
 ## 🚀 Getting Started
 
 ### Option 1 — Just open it
-1. Download `dubfx.html` (or clone this repo).
+1. Download `dubpadfx.html` (or clone this repo).
 2. Open the file directly in a browser (double-click, or drag it into a browser tab).
 3. Tap **▶ POWER ON** to initialize the audio engine (required by browsers before any sound can play).
 4. Tap **⊕ LOAD** to add your own audio files.
@@ -48,7 +48,7 @@ python3 -m http.server 8080
 npx http-server -p 8080
 ```
 
-Then open `http://localhost:8080/dubfx.html` on your device (same Wi-Fi network for phones/tablets).
+Then open `http://localhost:8080/dubpadfx.html` on your device (same Wi-Fi network for phones/tablets).
 
 ### Option 3 — Termux (Android)
 The app ships with a default sample path pointing at:
@@ -134,7 +134,7 @@ A hand-crafted **convolution impulse response** models a spring/plate reverb tan
 This is intentionally a **single HTML file** (`dubfx.html`) containing:
 
 ```
-dubfx.html
+dubpadfx.html
 ├── <style>   → all CSS (theming, layout, animations)
 ├── <body>    → markup (init screen, header, tabs, grid, echo unit, modals)
 └── <script>  → app logic:
