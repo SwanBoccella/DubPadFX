@@ -23,9 +23,9 @@ Built for live dub/sound-system performance, DJ FX, foley/soundboard use, or jus
 
 ---
 
-## 🖼️ Screenshots
+##TRY IT ONLINE!
 
-> _Add screenshots or a short screen recording here (e.g. `docs/screenshot-grid.png`, `docs/screenshot-echo.png`, `docs/screenshot-mixer.png`)._
+https://definite-teal-5ka734sq.edgeone.dev
 
 ---
 
