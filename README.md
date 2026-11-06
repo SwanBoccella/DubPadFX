@@ -1,7 +1,7 @@
 <h1 align="center">🎛️ DUB FX PAD — File Sampler</h1>
 
 <p align="center">
-  <img src="https://i.ibb.co/8v59HxL/Screenshot-20261106-050700-com-android-chrome-Chrome-Tabbed-Activity.jpg" alt="DUB FX PAD" width="360">
+  <img src="https://i.ibb.co/VpvRtdKj/Picsart-26-11-05-08-15-18-203.png" alt="DUB FX PAD" width="360">
 </p>
 
 <p align="center"><b>Dub sample pad with Roland-style Space Echo · Sampler a pad dub con Space Echo in stile Roland</b></p>
